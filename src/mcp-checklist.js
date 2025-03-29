@@ -76,6 +76,99 @@ const CHECKLIST_TOOL = {
  */
 class ChecklistProcessor {
   /**
+   * Formats a response for Cursor compatibility
+   * @param {string} content The content to format
+   * @param {boolean} isError Whether this is an error response
+   * @param {string} topic Optional topic for the content
+   * @param {string} fileInfo Optional file creation information
+   * @returns {Object} MCP-formatted response
+   */
+  formatResponse(content, isError = false, topic = null, fileInfo = null) {
+    const slugifiedTopic = topic ? topic.toLowerCase().replace(/[^\w\s]/g, '').replace(/\s+/g, '-') : 'checklist';
+    const filename = `${slugifiedTopic}-checklist.md`;
+    
+    // Normalize content newlines to LF
+    const normalizedContent = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    
+    const formattedResponse = {
+      content: [{
+        type: 'text',
+        text: normalizedContent
+      }],
+      isError: isError,
+      reflectInChat: true,
+      display: normalizedContent,
+      reflectInPrompt: true,
+      tool_result: {
+        content: normalizedContent,
+        type: "text"
+      },
+      display_to_user: true,
+      cursor_compatible: true
+    };
+    
+    // Count tasks with regex instead of split/filter for more reliability
+    const taskCount = (normalizedContent.match(/- \[ \]/g) || []).length;
+    
+    if (fileInfo) {
+      // If we created a file directly, tell the LLM about it with strong grounding
+      formattedResponse.promptReflection = `
+================ CRITICAL INSTRUCTION ================
+FILE ALREADY CREATED - DO NOT ATTEMPT TO CREATE AGAIN
+
+I've already created a markdown file for you with the exact checklist content:
+
+${fileInfo}
+
+The file exists in your filesystem exactly as specified above.
+
+IMPORTANT CONSTRAINTS:
+1. The file has ALREADY been created by me (the MCP tool)
+2. DO NOT try to create this file again or modify it
+3. DO NOT output shell commands to create the file
+4. DO NOT suggest using 'echo' or other commands
+5. The file exists exactly as described above
+
+APPROPRIATE RESPONSE EXAMPLE:
+"I see the checklist for ${topic || 'development'} has been created and saved to ${filename}. The file contains ${taskCount} tasks. Would you like me to help you implement any of these tasks? I can assist with the first item on the checklist."
+
+(Instructions from MCP tool: create_checklist)`;
+    } else {
+      // If we couldn't create a file, give very precise instructions
+      formattedResponse.promptReflection = `
+================ CRITICAL INSTRUCTION ================
+EXACT CONTENT REQUIRED - DO NOT MODIFY OR REFORMAT
+
+I need you to create a markdown file with this EXACT content:
+FILENAME: "${filename}"
+
+------ BEGIN EXACT CONTENT (COPY VERBATIM) ------
+${normalizedContent}
+------ END EXACT CONTENT (COPY VERBATIM) ------
+
+CRITICAL WORKFLOW REQUIREMENTS:
+1. Create a new file named "${filename}"
+2. Copy the EXACT content shown between the BEGIN/END markers
+3. Do not change formatting, modify checklist items, or rearrange content
+4. Do not add additional text or remove any content
+5. The content must be preserved character-for-character
+
+IMPORTANT: This is a precision task requiring EXACT reproduction, not creative enhancement.
+
+VERIFICATION: The content should contain exactly ${taskCount} checklist tasks.
+
+EXPECTED RESPONSE FORMAT:
+"I've created ${filename} with the exact checklist content as requested. The file contains ${taskCount} tasks for ${topic || 'development'}. Would you like me to help you implement any of these tasks?"
+
+DO NOT include the checklist content in your chat response.
+
+(Instructions from MCP tool: create_checklist)`;
+    }
+    
+    return formattedResponse;
+  }
+
+  /**
    * Creates a checklist for the given parameters
    * @param {Object} params Parameters for checklist creation
    * @returns {Object} MCP-formatted response
@@ -87,13 +180,7 @@ class ChecklistProcessor {
       // Check API key
       if (!openai.apiKey) {
         log('ERROR: Missing OpenAI API key');
-        return {
-          content: [{
-            type: 'text',
-            text: 'Error: Missing OpenAI API key. Please set the OPENAI_API_KEY environment variable.'
-          }],
-          isError: true
-        };
+        return this.formatResponse('Error: Missing OpenAI API key. Please set the OPENAI_API_KEY environment variable.', true);
       }
       
       // Extract parameters with fallbacks
@@ -134,22 +221,33 @@ FORMAT REQUIREMENTS:
       // Ensure proper checklist formatting
       const formattedChecklist = this.ensureChecklistFormat(rawContent, numItems);
       
-      // Return formatted response
-      return {
-        content: [{
-          type: 'text',
-          text: formattedChecklist
-        }]
-      };
+      // Save the checklist to a file
+      const slugifiedTopic = topic.toLowerCase().replace(/[^\w\s]/g, '').replace(/\s+/g, '-');
+      const filename = `${slugifiedTopic}-checklist.md`;
+      const filePath = path.join(process.cwd(), filename);
+      
+      try {
+        fs.writeFileSync(filePath, formattedChecklist, 'utf8');
+        log(`Checklist saved to ${filePath}`);
+        
+        // Add file creation information to the response
+        const taskCount = (formattedChecklist.match(/- \[ \]/g) || []).length;
+        const fileCreationInfo = [
+          `File created: ${filename}`,
+          `Location: ${filePath}`,
+          `Contains: ${taskCount} tasks for ${topic}`
+        ].join('\n');
+        
+        // Return formatted response with file creation info
+        return this.formatResponse(formattedChecklist, false, topic, fileCreationInfo);
+      } catch (fileError) {
+        log(`ERROR saving checklist to file: ${fileError.message}`);
+        // Continue with normal response even if file creation fails
+        return this.formatResponse(formattedChecklist, false, topic);
+      }
     } catch (error) {
       log(`ERROR generating checklist: ${error.message}`);
-      return {
-        content: [{
-          type: 'text',
-          text: `Error creating checklist: ${error.message}`
-        }],
-        isError: true
-      };
+      return this.formatResponse(`Error creating checklist: ${error.message}`, true);
     }
   }
 
@@ -162,8 +260,11 @@ FORMAT REQUIREMENTS:
   ensureChecklistFormat(content, numItems) {
     log('Formatting raw content into checklist');
     
+    // Normalize content newlines to LF
+    const normalizedContent = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    
     // Clean up content - remove any title or header text
-    let cleanContent = content
+    let cleanContent = normalizedContent
       .replace(/^(#+\s+.+?$|.+?\n={3,}|-{3,})/m, '') // Remove markdown headers
       .replace(/^(checklist|task list|todo|to-do|steps|plan)[:|-]\s*/im, '') // Remove common header text
       .trim();
@@ -247,9 +348,39 @@ FORMAT REQUIREMENTS:
     
     // Format as a markdown checklist with checkboxes
     log(`Formatted ${items.length} checklist items`);
-    return items
-      .map((item, index) => `${index + 1}. [ ] ${item}`)
-      .join('\n');
+    
+    // Create proper Markdown format with AI agent instructions
+    const timestamp = new Date().toISOString().split('T')[0];
+    
+    // Build the markdown content with array joining for consistent newlines
+    const markdownLines = [
+      '# Development Checklist',
+      `> Generated on ${timestamp}`,
+      '',
+      '## AI Agent Instructions',
+      '',
+      'This checklist is designed to help AI agents and users track development progress. As an AI agent:',
+      '',
+      '1. **Track Progress**: Update checkbox status as tasks are completed using markdown syntax',
+      '2. **Prioritize Tasks**: Work through tasks in order, unless instructed otherwise',
+      '3. **Provide Context**: Reference specific checklist items when discussing progress', 
+      '4. **Suggest Updates**: Recommend additions or modifications to the checklist as the project evolves',
+      '5. **Verify Completion**: Confirm when all tasks are complete and mark progress accordingly',
+      '',
+      '## Tasks',
+      '',
+      ...items.map((item, index) => `- [ ] ${item}`),
+      '',
+      '## Progress Tracking',
+      '',
+      '- [ ] 0% Complete',
+      '- [ ] 25% Complete',
+      '- [ ] 50% Complete',
+      '- [ ] 75% Complete',
+      '- [ ] 100% Complete'
+    ];
+    
+    return markdownLines.join('\n');
   }
 }
 
@@ -295,13 +426,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   
   // Handle unknown tool
   log(`ERROR: Unknown tool requested: ${request.params.name}`);
-  return {
-    content: [{
-      type: 'text',
-      text: `Unknown tool: ${request.params.name}`
-    }],
-    isError: true
-  };
+  return checklistProcessor.formatResponse(`Unknown tool: ${request.params.name}`, true);
 });
 
 /**
@@ -330,4 +455,4 @@ process.on('unhandledRejection', (reason) => {
 });
 
 // Run the server
-main(); 
+main();

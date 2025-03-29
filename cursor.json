@@ -7,7 +7,13 @@
   "tools": [
     {
       "name": "create_checklist",
-      "description": "Create a checklist for any specified task or context"
+      "description": "Create a checklist for any specified task or context",
+      "reflectInPrompt": true,
+      "reflectInChat": true,
+      "displayToUser": true
     }
-  ]
+  ],
+  "reflectToolOutputsInPrompt": true,
+  "reflectToolOutputsInChat": true,
+  "displayToolOutputsToUser": true
 } 
