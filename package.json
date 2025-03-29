@@ -1,0 +1,68 @@
+{
+  "name": "cursor-mcp-checklist",
+  "version": "1.0.0",
+  "description": "MCP for Cursor that creates agent checklists using OpenAI",
+  "type": "module",
+  "main": "src/mcp-checklist.js",
+  "bin": {
+    "mcp-checklist": "src/mcp-checklist.js"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "verify": "node scripts/verify.js",
+    "start": "node src/mcp-checklist.js",
+    "postinstall": "node scripts/post-install.js",
+    "setup-cursor": "node scripts/setup-cursor.js",
+    "prepublishOnly": "pnpm verify"
+  },
+  "keywords": [
+    "cursor",
+    "mcp",
+    "openai",
+    "checklist",
+    "agent",
+    "cursor-mcp",
+    "cursor-tool"
+  ],
+  "cursor": {
+    "type": "mcp",
+    "bin": "src/mcp-checklist.js",
+    "tools": [
+      {
+        "name": "create_checklist",
+        "description": "Create a checklist for the given context or task"
+      }
+    ]
+  },
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.5.0",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.8.0",
+    "chalk": "5.4.1",
+    "commander": "13.1.0",
+    "dotenv": "^16.4.7",
+    "inquirer": "12.5.0",
+    "openai": "4.90.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "files": [
+    "src/",
+    "scripts/",
+    "examples/"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mikemikula/mcp-checklist.git"
+  },
+  "bugs": {
+    "url": "https://github.com/mikemikula/mcp-checklist/issues"
+  },
+  "homepage": "https://github.com/mikemikula/mcp-checklist#readme",
+  "devDependencies": {
+    "@modelcontextprotocol/inspector": "^0.7.0",
+    "nodemon": "^3.1.9"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "cursor-mcp-checklist",
+  "version": "1.0.0",
+  "description": "MCP for creating agent checklists",
+  "type": "mcp",
+  "bin": "src/mcp-checklist.js",
+  "tools": [
+    {
+      "name": "create_checklist",
+      "description": "Create a checklist for any specified task or context"
+    }
+  ]
+} 
