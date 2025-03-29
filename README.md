@@ -2,6 +2,10 @@
 
 A Model Context Protocol (MCP) server that generates markdown checklists with checkboxes for use with AI tools like Cursor and Claude.
 
+
+https://github.com/user-attachments/assets/59ba395b-cbac-4204-a17e-b023cad5ea1d
+
+
 ## Features
 
 - Creates properly formatted markdown checklists with checkboxes
