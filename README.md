@@ -1,4 +1,4 @@
-```FYI - This was just a quick prototype to test MCP. 😃```
+```FYI - This was just a quick prototype (NOT PRODUCTION CODE) to test MCP. 😃```
 
 
 # MCP Checklist Server
