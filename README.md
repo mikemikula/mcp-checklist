@@ -1,3 +1,6 @@
+```FYI - This was just a quick prototype to test MCP. 😃```
+
+
 # MCP Checklist Server
 
 A Model Context Protocol (MCP) server that generates markdown checklists with checkboxes for use with AI tools like Cursor and Claude.
